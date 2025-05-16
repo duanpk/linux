@@ -1,0 +1,1210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Linux Quiz - Editable</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .toc-active {
+            background-color: #e0e7ff; /* indigo-100 */
+            color: #4f46e5; /* indigo-700 */
+            font-weight: 600;
+        }
+        #answer-content table, #answer-content th, #answer-content td,
+        #question-body table, #question-body th, #question-body td {
+            border: 1px solid #e2e8f0;
+        }
+        #answer-content th, #answer-content td,
+        #question-body th, #question-body td {
+            padding: 0.5rem;
+            text-align: left;
+            min-width: 80px; 
+        }
+        #question-body .empty-cell {
+            background-color: #f8fafc; 
+            height: 2.5rem; 
+        }
+        #answer-content thead tr, #question-body thead tr {
+            background-color: #f3f4f6;
+        }
+        #answer-content pre, #question-body pre {
+            background-color: #e5e7eb;
+            padding: 0.75rem;
+            border-radius: 0.375rem;
+            overflow-x: auto;
+            font-size: 0.875rem;
+            line-height: 1.25rem;
+        }
+        #answer-content code, #question-body code {
+            font-family: monospace;
+            background-color: #f3f4f6;
+            padding: 0.125rem 0.25rem;
+            border-radius: 0.25rem;
+            color: #c026d3;
+        }
+        #answer-content pre code, #question-body pre code {
+            background-color: transparent;
+            padding: 0;
+            color: inherit;
+        }
+        .matching-list { list-style: none; padding: 0; }
+        .matching-item {
+            transition: transform 0.15s, box-shadow 0.15s, background-color 0.2s;
+            user-select: none;
+            height: 100%;
+            display: flex;
+            align-items: center;
+        }
+        .matching-item.dragging {
+            opacity: 0.7;
+            cursor: grabbing;
+            box-shadow: 0 5px 10px rgba(0,0,0,0.1);
+            transform: scale(1.02);
+        }
+        .matching-item.correct {
+            background-color: #dcfce7 !important;
+            border-color: #4ade80 !important;
+        }
+        .matching-item.incorrect {
+            background-color: #fee2e2 !important;
+            border-color: #f87171 !important;
+        }
+        .matching-item .feedback-icon {
+            font-weight: bold;
+            margin-left: auto;
+        }
+        .matching-container { 
+            position: relative;
+            width: 100%;
+        }
+        .command-item {
+            display: flex;
+            align-items: stretch;
+            height: 100%;
+        }
+        .definition-item {
+            display: flex;
+            align-items: stretch;
+            height: 100%;
+        }
+        .matching-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+            width: 100%;
+        }
+        .matching-row {
+            display: contents;
+        }
+        .matching-header {
+            padding: 0.75rem;
+            font-weight: 600;
+            text-align: center;
+            background-color: #f3f4f6;
+            border-radius: 0.375rem;
+        }
+        #toc-container::-webkit-scrollbar { width: 8px; }
+        #toc-container::-webkit-scrollbar-track { background: #f1f5f9; }
+        #toc-container::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
+        #toc-container::-webkit-scrollbar-thumb:hover { background: #64748b; }
+        #answer-content .animated-cell {
+            opacity: 0; transform: translateY(10px);
+            transition: opacity 0.4s ease-out, transform 0.4s ease-out;
+        }
+        /* Styles for editable areas */
+        [contenteditable="true"] {
+            outline: 2px dashed #4f46e5; /* indigo-600 */
+            padding: 0.25rem;
+            background-color: #eff6ff; /* blue-50 */
+        }
+        .editable-option-text {
+             outline: 1px dashed #9ca3af; /* gray-400 */
+             padding: 2px;
+             min-width: 100px; /* Ensure it's clickable */
+             display: inline-block; /* Allow outline */
+        }
+        #updated-data-modal {
+            transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+        }
+        /* Styles for MCQ feedback */
+        .feedback-icon {
+            margin-left: 0.75rem; /* ml-3 */
+            font-size: 1.1em;
+            display: inline-block; /* Ensure space is taken */
+            width: 1.2em; /* Fixed width for alignment */
+            text-align: center;
+        }
+        .option-correct { background-color: #dcfce7 !important; /* green-100 */ border-color: #4ade80 !important; /* green-400 */ }
+        .option-incorrect { background-color: #fee2e2 !important; /* red-100 */ border-color: #f87171 !important; /* red-400 */ }
+        .option-missed { background-color: #fef9c3 !important; /* yellow-100 */ border-color: #facc15 !important; /* yellow-400 */ }
+
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-100 via-gray-50 to-stone-100 selection:bg-indigo-500 selection:text-white">
+
+    <div class="flex flex-col md:flex-row min-h-screen">
+        <aside id="toc-container" class="w-full md:w-80 bg-white p-6 shadow-lg overflow-y-auto md:h-screen md:sticky md:top-0">
+            <h2 class="text-2xl font-bold text-indigo-700 mb-6 sticky top-0 bg-white pb-3 z-10">Table of Contents</h2>
+            <ul id="toc-list" class="space-y-1"></ul>
+        </aside>
+
+        <main class="w-full p-6 md:p-10 flex flex-col items-center">
+            <div class="bg-white shadow-2xl rounded-xl p-6 md:p-10 w-full max-w-4xl">
+                <div class="text-center mb-6">
+                    <h1 class="text-3xl md:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">Linux Training Quiz</h1>
+                </div>
+
+                <div id="edit-mode-controls" class="my-4 p-3 bg-yellow-100 border border-yellow-300 rounded-lg hidden">
+                    <p class="text-sm text-yellow-700 mb-2"><strong class="font-semibold">Edit Mode:</strong> You can now edit the question and answer content directly. For answers with complex HTML (like tables), edit the HTML carefully.</p>
+                    <div class="flex justify-end space-x-3">
+                        <button id="save-changes-btn" class="btn bg-green-500 hover:bg-green-600 text-white px-4 py-2">Save Changes</button>
+                        <button id="discard-changes-btn" class="btn bg-red-500 hover:bg-red-600 text-white px-4 py-2">Discard Changes</button>
+                    </div>
+                </div>
+                
+                <div id="progress-indicator" class="text-center text-gray-600 mb-6 text-sm md:text-base font-medium"></div>
+
+                <div id="question-render-area" class="mb-6 min-h-[200px] p-4 bg-indigo-50 rounded-lg border-2 border-indigo-200">
+                    <h2 id="question-title" class="text-xl md:text-2xl font-semibold text-indigo-800 mb-4"></h2>
+                    <div id="question-body" class="text-gray-700 text-base"></div>
+                </div>
+
+                <div id="answer-container" class="mb-8 p-4 bg-green-50 rounded-lg border border-green-200 min-h-[100px] hidden">
+                    <h3 class="text-lg font-semibold text-green-700 mb-2">Answer Explanation:</h3>
+                    <div id="answer-content" class="text-gray-800 text-sm md:text-base leading-relaxed"></div>
+                </div>
+
+                <div class="flex flex-col sm:flex-row justify-between items-center space-y-3 sm:space-y-0">
+                    <button id="prev-btn" class="btn bg-gray-300 hover:bg-gray-400 text-gray-800 w-full sm:w-auto">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline mr-1" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>
+                        Previous
+                    </button>
+                    <div id="center-buttons" class="flex space-x-2 order-first sm:order-none">
+                        <button id="edit-content-btn" class="btn bg-blue-500 hover:bg-blue-600 text-white px-4 py-2">Edit Content</button>
+                        <button id="submit-answer-btn" class="btn bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 hidden">Submit Answer</button> 
+                        <button id="toggle-answer-btn" class="btn bg-green-500 hover:bg-green-600 text-white w-full sm:w-auto">
+                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline mr-1" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
+                             Show Answer
+                        </button>
+                    </div>
+                    <button id="next-btn" class="btn bg-indigo-600 hover:bg-indigo-700 text-white w-full sm:w-auto">
+                        Next
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline ml-1" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" /></svg>
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="updated-data-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center p-4 z-50 invisible opacity-0">
+        <div class="bg-white p-6 rounded-lg shadow-xl max-w-2xl w-full">
+            <h3 class="text-xl font-semibold mb-3 text-gray-800">Content Saved to Browser Memory</h3>
+            <p class="text-sm text-gray-600 mb-4">
+                Your changes have been saved in the current browser session. To make them permanent, copy the updated data below and replace the <code>slides</code> array in your HTML file's <code>&lt;script&gt;</code> tag.
+            </p>
+            <textarea id="updated-slides-data" readonly class="w-full h-64 p-2 border border-gray-300 rounded-md font-mono text-xs bg-gray-50"></textarea>
+            <div class="mt-4 flex justify-end">
+                <button id="copy-data-btn" class="btn bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 mr-2">Copy Data</button>
+                <button id="close-modal-btn" class="btn bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Slides data as provided by the user
+        let slides = [ 
+            {
+                id: "q1",
+                type: "open-ended",
+                question: "What is Linux? Why is Linux commonly used to host web applications/databases?",
+                answer: "Linux is an operating system (like Windows or macOS) that is often used for personal computers, servers, and embedded devices.<br><br>Linux is commonly used for hosting web applications and databases because:<br>1. It typically runs without a GUI by default, which results in better stability, improved performance, and easier remote access.<br>2. It is open source, making it free to use, supported by a large community, and regularly updated with security patches.<br>3. It offers excellent customization options and resource efficiency, which is ideal for server environments."
+            },
+            {
+                id: "q2",
+                type: "matching",
+                question: "Match the Linux commands to their descriptions. (The answer will show the correct pairings)",
+                items: [ 
+                    { id: "cmd1", text: "<code>whoami</code>" }, { id: "cmd2", text: "<code>echo</code>" }, { id: "cmd3", text: "<code>pwd</code>" },
+                    { id: "cmd4", text: "<code>ls</code>" }, { id: "cmd5", text: "<code>cd</code>" }, { id: "cmd6", text: "<code>cat</code>" }, { id: "cmd7", text: "<code>rm</code>" }
+                ],
+                definitions: [ 
+                    { id: "def1", text: "Tells you the name of the user you are currently logged in as." },
+                    { id: "def2", text: "Prints text, numbers, or the value of variables to the terminal." },
+                    { id: "def3", text: "Shows the full path of the current location." },
+                    { id: "def4", text: "Lists the files and directories." },
+                    { id: "def5", text: "Changes directory to another location." },
+                    { id: "def6", text: "Displays the contents of files." },
+                    { id: "def7", text: "Removes files or directories." }
+                ],
+                answer: "<code>whoami</code> : Tells you the name of the user you are currently logged in as.<br>" +
+                        "<code>echo</code> : Prints text, numbers, or the value of variables to the terminal.<br>" +
+                        "<code>pwd</code> : Shows the full path of current location.<br>" +
+                        "<code>ls</code> : Lists the files and directories.<br>" +
+                        "<code>cd</code> : Change directory to another location.<br>" +
+                        "<code>cat</code> : Displays the contents of files.<br>" +
+                        "<code>rm</code> : Removes files or directories."
+            },
+            {
+                id: "q3",
+                type: "single-choice",
+                question: "How do you print out \"I'm a developer\" to the terminal (including both the single and double quotes)?",
+                options: [
+                    { text: "<code>echo \"\\\"I'm a developer\\\"\"</code>" }, 
+                    { text: "<code>print(\"I'm a developer\")</code>" },
+                    { text: "<code>echo 'I\\'m a developer'</code>" }, 
+                    { text: "<code>cat <<< \"\\\"I'm a developer\\\"\"</code>" }
+                ],
+                correctAnswerIndex: 0,
+                answer: "<code>echo \"\\\"I'm a developer\\\"\"</code> is the correct command to print the text with both quotes included."
+            },
+            {
+                id: "q4",
+                type: "multiple-choice",
+                question: "Which of the following statements correctly describe how the file system in Linux works? (Select all that apply)",
+                options: [
+                    { text: "Organized as a tree structure." },
+                    { text: "Starting from a single top-most directory called the root (<code>/</code>) directory." },
+                    { text: "Each user has a completely separate file system tree from others." },
+                    { text: "Drives are mounted as separate letters like C:, D: in Windows." },
+                    { text: "The root directory is represented by <code>/</code>." },
+                    { text: "Files and directories can be located anywhere, not necessarily under root." },
+                    { text: "All other directories and files are located within this tree." }
+                ],
+                correctAnswerIndices: [0,1,4,6],
+                answer: "<ul class='list-disc pl-6'><li>Organized as a tree structure.</li><li>Starting from a single top-most directory called the root (<code>/</code>) directory.</li><li>All other directories and files are located within this tree.</li><li>The root directory is represented by <code>/</code>.</li></ul>"
+            },
+            {
+                id: "q5",
+                type: "table-answer", 
+                question: "What are the differences between file systems in Linux and Windows?",
+                answer: "<table class='w-full text-left border-collapse table-auto mt-2'>" +
+                        "<thead><tr class='bg-indigo-100'><th class='p-2 border'></th><th class='p-2 border'>Linux</th><th class='p-2 border'>Windows</th></tr></thead>" +
+                        "<tbody>" +
+                        "<tr><td class='p-2 border font-semibold'>Path specification</td><td class='p-2 border'>Forward slash (<code>/</code>)</td><td class='p-2 border'>Backslash (<code>\\</code>)</td></tr>" +
+                        "<tr><td class='p-2 border font-semibold'>Root structure</td><td class='p-2 border'>Single root tree (<code>/</code>)</td><td class='p-2 border'>Multiple drive letters (C:, D:, etc.)</td></tr>" +
+                        "<tr><td class='p-2 border font-semibold'>Case sensitivity</td><td class='p-2 border'>Case-sensitive</td><td class='p-2 border'>Case-insensitive</td></tr>" +
+                        "</tbody></table>"
+            },
+            {
+                id: "q6",
+                type: "single-choice",
+                question: "Which command is used to list all files along with their detailed information (permissions, owner, size, etc.)?",
+                options: [
+                    { text: "<code>ls -a</code>" },
+                    { text: "<code>ls -l</code>" }, 
+                    { text: "<code>list --all --info</code>" },
+                    { text: "<code>cat --details *</code>" }
+                ],
+                correctAnswerIndex: 1,
+                answer: "<code>ls -l</code> is the correct command. It shows files in a long listing format with detailed information including permissions, number of links, owner, group, size, date/time, and filename."
+            },
+            {
+                id: "q7",
+                type: "multiple-choice",
+                question: "Which of the following statements are TRUE about hard links and soft (symbolic) links in Linux? (Select all that apply)",
+                options: [
+                    { text: "A file with multiple hard links will be deleted as soon as one hard link is removed." },
+                    { text: "A soft link is like a shortcut to the original file." },
+                    { text: "Hard links can be created for both files and directories by default." },
+                    { text: "Deleting the original file breaks the soft link but not the hard link." },
+                    { text: "Soft links have their own inode and permissions, separate from the target file." },
+                    { text: "Hard links cannot span different file systems or partitions." },
+                    { text: "A hard link points directly to the inode of the file." },
+                    { text: "Soft links can point to directories, but hard links usually cannot (except for '.' and '..')." },
+                    { text: "Soft links can be used to link files across different file systems." }
+                ],
+                correctAnswerIndices: [1,3,5,6,7,8],
+                answer: `<ul class='list-disc pl-6'>
+                    <li>A soft link is like a shortcut to the original file.</li>
+                    <li>Deleting the original file breaks the soft link but not the hard link.</li>
+                    <li>Hard links cannot span different file systems or partitions.</li>
+                    <li>A hard link points directly to the inode of the file.</li>
+                    <li>Soft links can point to directories, but hard links usually cannot (except for '.' and '..').</li>
+                    <li>Soft links can be used to link files across different file systems.</li>
+                </ul>`
+            },
+            {
+                id: "q8",
+                type: "interactive-table", 
+                question: "If you have one original file with one hard link and one soft link created from it, how would each file be affected when one of them is deleted?",
+                tableShell: {
+                    headers: ["", "Original", "Hard link", "Soft link"],
+                    rows: [
+                        { label: "Delete original", cells: 3 }, 
+                        { label: "Delete hard link", cells: 3 },
+                        { label: "Delete soft link", cells: 3 }
+                    ]
+                },
+                answer: "<table class='w-full text-left border-collapse table-auto mt-2'>" +
+                        "<thead><tr class='bg-indigo-100'><th class='p-2 border'></th><th class='p-2 border'>Original</th><th class='p-2 border'>Hard link</th><th class='p-2 border'>Soft link</th></tr></thead>" +
+                        "<tbody>" +
+                        "<tr><td class='p-2 border font-semibold animated-cell'>Delete original</td><td class='p-2 border animated-cell'>❌</td><td class='p-2 border animated-cell'>Not affected</td><td class='p-2 border animated-cell'>Broken</td></tr>" +
+                        "<tr><td class='p-2 border font-semibold animated-cell'>Delete hard link</td><td class='p-2 border animated-cell'>Not affected</td><td class='p-2 border animated-cell'>❌</td><td class='p-2 border animated-cell'>Not affected</td></tr>" +
+                        "<tr><td class='p-2 border font-semibold animated-cell'>Delete soft link</td><td class='p-2 border animated-cell'>Not affected</td><td class='p-2 border animated-cell'>Not affected</td><td class='p-2 border animated-cell'>❌</td></tr>" +
+                        "</tbody></table>"
+            },
+            {
+                id: "q9",
+                type: "open-ended", 
+                question: "List all ownership types and permission types in Linux.",
+                answer: "<strong>Ownership:</strong><br>" +
+                        "The Owner of the file -> User (u)<br>" +
+                        "The Group that owns the file -> Group (g)<br>" +
+                        "Others (all other users on the system) -> Other (o)<br><br>" +
+                        "<strong>Permissions:</strong><br>" +
+                        "<strong>Read (r):</strong> Allows viewing the file's content. For a directory, allows listing its contents.<br>" +
+                        "<strong>Write (w):</strong> Allows changing or saving changes to a file's content. For a directory, allows adding, removing, or renaming files within that directory.<br>" +
+                        "<strong>Execute (x):</strong> Allows running a file as a command or script. For a directory, allows accessing files within it (e.g., entering it with <code>cd</code>)."
+            },
+            {
+                id: "q10",
+                type: "open-ended", 
+                question: "Explain the string permission <span style=\"background-color: rgb(243, 244, 246); color: rgb(192, 38, 211); font-family: monospace; font-size: 1em; font-weight: bolder;\">-rw--w----</span> and convert it to numeric format (like 777).",
+                answer: "<strong>Explanation of string permission <code>-rw--w----</code>:</strong><br>" +
+                        "First character (<code>-</code>) indicates this is a regular file (not a directory, link, etc.)<br><br>" +
+                        "<table class='w-full text-left border-collapse table-auto mt-2'>" +
+                        "<thead><tr class='bg-indigo-100'><th class='p-2 border'>Permission</th><th class='p-2 border'>Category</th><th class='p-2 border'>Read</th><th class='p-2 border'>Write</th><th class='p-2 border'>Execute</th><th class='p-2 border'>Numeric</th></tr></thead>" +
+                        "<tbody>" +
+                        "<tr><td class='p-2 border'><code>rw-</code></td><td class='p-2 border'>User</td><td class='p-2 border'>✅</td><td class='p-2 border'>✅</td><td class='p-2 border'>❌</td><td class='p-2 border'>6</td></tr>" +
+                        "<tr><td class='p-2 border'><code>-w-</code></td><td class='p-2 border'>Group</td><td class='p-2 border'>❌</td><td class='p-2 border'>✅</td><td class='p-2 border'>❌</td><td class='p-2 border'>2</td></tr>" +
+                        "<tr><td class='p-2 border'><code>---</code></td><td class='p-2 border'>Other</td><td class='p-2 border'>❌</td><td class='p-2 border'>❌</td><td class='p-2 border'>❌</td><td class='p-2 border'>0</td></tr>" +
+                        "</tbody></table><br>" +
+                        "<strong>Numeric equivalent: 620</strong>"
+            },
+            {
+                id: "q11",
+                type: "multiple-choice",
+                question: "For a file with permissions <span style=\"color: rgb(192, 38, 211); font-family: monospace; background-color: rgb(243, 244, 246);\">-rw--w----</span>, which command will add ONLY execute permission for all users without changing any existing permissions?",
+                options: [ 
+                    { text: "<code>chmod a+x filename</code>" },
+                    { text: "<code>chmod 777 filename</code>" }, 
+                    { text: "<code>chmod 731 filename</code>" },
+                    { text: "<code>setperm +x filename</code>" } 
+                ],
+                correctAnswerIndices: [0, 2], 
+                answer: "The correct answers are:<br><br><code>chmod a+x filename</code> - This command adds (+) execute (x) permission for all users (a) while preserving all existing permissions.<br><br><code>chmod 731 filename</code> - For this specific file with permissions <code>-rw--w----</code> (620), setting permissions to 731 adds execute permission while maintaining existing read/write permissions:<br>- Owner: <code>rw-</code> → <code>rwx</code> (added x)<br>- Group: <code>-w-</code> → <code>-wx</code> (added x)<br>- Others: <code>---</code> → <code>--x</code> (added x)<br><br>Note: The difference between these commands is that <code>chmod a+x</code> works universally on any file to add execute permission without changing other permissions, while <code>chmod 731</code> sets absolute permissions and would alter read/write permissions if the starting permissions were different.<br><br>Option <code>chmod 777</code> would give full permissions (rwx) to everyone, which adds execute but also changes other permissions. The <code>setperm</code> command is not a standard Linux command."
+            },
+            {
+                id: "q12",
+                type: "multiple-choice",
+                question: "What permission do I need to read/remove/edit/rename... a file in a folder? (Select all true statements)",
+                options: [
+                    { text: "To remove/rename a file: Write (w) permission on the parent folder." },
+                    { text: "To edit a file: Write (w) permission on the parent folder is sufficient." },
+                    { text: "To read a file: Read (r) permission on the file itself." },
+                    { text: "To remove a file: Write (w) permission on the file itself is sufficient." },
+                    { text: "To edit a file: Write (w) permission on the file itself." },
+                    { text: "To read a file: Execute (x) permission on its parent folder is required." }
+                ],
+                correctAnswerIndices: [0,2,4],
+                answer: "To <strong>read</strong> the content of a file, you need <strong>Read</strong> permission on that file.<br>" +
+                        "To <strong>remove</strong> or <strong>rename</strong> a file, you need <strong>Write</strong> permission on the <strong>parent folder</strong>.<br>" +
+                        "To <strong>edit</strong> the content of a file, you need <strong>Write</strong> permission on that file."
+            },
+            {
+                id: "q13",
+                type: "open-ended",
+                question: "What is shell, bash, terminal, different between them?",
+                answer: "<strong>Shell</strong> is CLI allow user interact with OS by command.<br>" +
+                        "<strong>Bash</strong> is one of the most widely used shell programs. Besides sh, zsh, csh,...<br>" +
+                        "<strong>Terminal</strong> is interface/window where you type command and see the output."
+            },
+            {
+                id: "q14",
+                type: "open-ended",
+                question: "List kinds of variables, compare $0, $n, $#,... is? (shell variable)",
+                answer: "<strong>Local variables:</strong> only available in function, script.<br>" +
+                        "<strong>Env variables:</strong> can access from anywhere.<br>" +
+                        "<strong>Shell variables:</strong> set by shell."
+            },
+            {
+                id: "q15",
+                type: "open-ended",
+                question: "What is the pipe command (<code>|</code>) used for?",
+                answer: "The <strong>pipe command (<code>|</code>)</strong> is used to send the output of the first command as input to the second command. It allows chaining multiple commands together, where each command processes the output of the previous one."
+            },
+            {
+                id: "q16",
+                type: "open-ended",
+                question: "How do you search for a string within the result of the cat command in Linux?",
+                answer: "To search for a string within the result of the cat command, you can use the pipe command to connect cat with grep:<br><code>cat filename | grep \"string\"</code><br><br>This will display only the lines from the file that contain the specified string."
+            },
+            {
+                id: "q17",
+                type: "open-ended",
+                question: "What is SSH and why do we use it?",
+                answer: "<strong>SSH (Secure Shell)</strong> is a cryptographic network protocol for secure remote communication.<br><br>We use SSH because it provides:<br>" +
+                        "<ul class='list-disc pl-6'>" +
+                        "<li><strong>Encrypted sessions</strong> that protect all transmitted data</li>" +
+                        "<li><strong>Strong authentication mechanisms</strong> including password and public key cryptography</li>" +
+                        "</ul><br>" +
+                        "<strong>Note:</strong> Alternative protocols like Telnet and FTP are insecure because they transmit data including passwords as plaintext, making them vulnerable to eavesdropping."
+            },
+            {
+                id: "q18",
+                type: "open-ended",
+                question: "How to connect using SSH?",
+                answer: "There are two main methods to establish an SSH connection:<br><br>" +
+                        "<strong>1. Using Password Authentication:</strong><br>" +
+                        "- Run the command: <code>ssh username@hostname</code><br>" +
+                        "- When prompted, enter the password for the remote user account.<br><br>" +
+                        "<strong>2. Using SSH Key Authentication:</strong><br>" +
+                        "- Generate key pair using <code>ssh-keygen</code><br>" +
+                        "- Copy public key to server with <code>ssh-copy-id username@hostname</code><br>" +
+                        "- Connect by running <code>ssh username@hostname</code> (no password needed)<br><br>" +
+                        "SSH key authentication is more secure and convenient than password authentication."
+            },
+            {
+                id: "q19",
+                type: "open-ended",
+                question: "When connecting to SSH using SSH keys, where are the keys stored?",
+                answer: "<strong>SSH keys are stored in specific locations:</strong><br><br>" +
+                        "<strong>On the client (local) machine:</strong><br>" +
+                        "- Private key: <code>~/.ssh/id_rsa</code> (or id_ed25519, id_dsa, etc.)<br>" +
+                        "- Public key: <code>~/.ssh/id_rsa.pub</code> (same base name as private key with .pub extension)<br>" +
+                        "- Known hosts: <code>~/.ssh/known_hosts</code> (stores fingerprints of servers you've connected to)<br><br>" +
+                        "<strong>On the server (remote) machine:</strong><br>" +
+                        "- Authorized public keys: <code>~/.ssh/authorized_keys</code> (contains public keys that are allowed to login)<br><br>" +
+                        "The private key must be kept secure and should never be shared, while the public key can be distributed to servers you want to access."
+            },
+            {
+                id: "q20",
+                type: "single-choice",
+                question: "What is the default SSH port number?",
+                options: [
+                    { text: "22" },
+                    { text: "23" },
+                    { text: "25" },
+                    { text: "21" }
+                ],
+                correctAnswerIndex: 0,
+                answer: "The default SSH port is <strong>22</strong>.<br><br>Other common ports:<br>- Port 21: FTP (File Transfer Protocol)<br>- Port 23: Telnet (insecure predecessor to SSH)<br>- Port 25: SMTP (Simple Mail Transfer Protocol)"
+            },
+            {
+                id: "q21",
+                type: "open-ended",
+                question: "Compare advantages and disadvantages of password authentication and key-based authentication in SSH.",
+                answer: "<table class='w-full text-left border-collapse table-auto mt-2'>" +
+                        "<thead><tr class='bg-indigo-100'><th class='p-2 border'>Criteria</th><th class='p-2 border'>Password Authentication</th><th class='p-2 border'>Key-Based Authentication</th></tr></thead>" +
+                        "<tbody>" +
+                        "<tr><td class='p-2 border font-semibold'>Security Level</td>" +
+                        "<td class='p-2 border'>Lower; vulnerable to brute-force attacks</td>" +
+                        "<td class='p-2 border'>Higher; practically immune to brute-force attacks</td></tr>" +
+                        
+                        "<tr><td class='p-2 border font-semibold'>Setup Complexity</td>" +
+                        "<td class='p-2 border'>Simple; works out of the box</td>" +
+                        "<td class='p-2 border'>Requires initial setup (generating keys and copying to server)</td></tr>" +
+                        
+                        "<tr><td class='p-2 border font-semibold'>Authentication Process</td>" +
+                        "<td class='p-2 border'>User manually enters password for each login</td>" +
+                        "<td class='p-2 border'>Automatic (passwordless) using public/private key pair</td></tr>" +
+                        
+                        "<tr><td class='p-2 border font-semibold'>Automation Support</td>" +
+                        "<td class='p-2 border'>Limited; difficult to use in scripts without exposing password</td>" +
+                        "<td class='p-2 border'>Excellent; ideal for automated tasks and scripts</td></tr>" +
+                        
+                        "<tr><td class='p-2 border font-semibold'>Credential Management</td>" +
+                        "<td class='p-2 border'>Password can be changed easily if compromised</td>" +
+                        "<td class='p-2 border'>If key is compromised, must update all servers using the key</td></tr>" +
+                        
+                        "<tr><td class='p-2 border font-semibold'>Storage Requirements</td>" +
+                        "<td class='p-2 border'>No files to store (only memorized password)</td>" +
+                        "<td class='p-2 border'>Requires secure storage of private key files</td></tr>" +
+                        
+                        "<tr><td class='p-2 border font-semibold'>Connection Speed</td>" +
+                        "<td class='p-2 border'>Slightly slower (password verification)</td>" +
+                        "<td class='p-2 border'>Slightly faster connection establishment</td></tr>" +
+                        
+                        "<tr><td class='p-2 border font-semibold'>Additional Security Options</td>" +
+                        "<td class='p-2 border'>Limited to password strength</td>" +
+                        "<td class='p-2 border'>Can add passphrase to key; can use ssh-agent</td></tr>" +
+                        "</tbody></table>"
+            },
+            {
+                id: "q22",
+                type: "single-choice",
+                question: "What is the correct command to connect to a Linux server at 192.168.0.1 using the username 'test'?",
+                options: [
+                    { text: "<code>ssh test@192.168.0.1</code>" },
+                    { text: "<code>ssh 192.168.0.1@test</code>" },
+                    { text: "<code>ssh -u test 192.168.0.1</code>" },
+                    { text: "<code>ssh -u 192.168.0.1 test</code>" }
+                ],
+                correctAnswerIndex: 0,
+                answer: "The correct command is <code>ssh test@192.168.0.1</code><br><br>This is the standard SSH syntax where:<br>- <code>ssh</code> is the command to initiate an SSH connection<br>- <code>test</code> is the username<br>- <code>@</code> separates the username and the server address<br>- <code>192.168.0.1</code> is the server's IP address<br><br>Note: <code>ssh -l test 192.168.0.1</code> is also technically valid but less commonly used."
+            },
+            {
+                id: "q23",
+                type: "single-choice",
+                question: "To transfer SSH key authentication from Machine A to Machine B (so Machine B can connect to a Server that Machine A can already connect to), what should you do?",
+                options: [
+                    { text: "Just copy the server's public key to Machine B" },
+                    { text: "Just copy Machine A's private key to Machine B" },
+                    { text: "Copy both Machine A's private key AND the server's public key to Machine B" },
+                    { text: "It's not possible to transfer SSH authentication between machines" }
+                ],
+                correctAnswerIndex: 1,
+                answer: "The correct answer is to copy Machine A's private key to Machine B.<br><br>To understand why:<br><br>- <strong>SSH key authentication</strong> works using a key pair: the private key (on your local machine) and the public key (on the remote server)<br><br>- The server already has Machine A's public key in its <code>~/.ssh/authorized_keys</code> file<br><br>- To authenticate as the same identity, Machine B needs the corresponding private key that matches the public key on the server<br><br>- Simply copy Machine A's private key (typically <code>~/.ssh/id_rsa</code> or similar) to the same location on Machine B<br><br>- You should set proper permissions on the private key (<code>chmod 600</code>) after copying it<br><br><strong>Security Note:</strong> While this works technically, from a security perspective, it's generally better to generate a new key pair for Machine B and add its public key to the server's <code>authorized_keys</code> file."
+            }
+        ];
+
+        // DOM Elements
+        const tocListEl = document.getElementById('toc-list');
+        const questionTitleEl = document.getElementById('question-title');
+        const questionBodyEl = document.getElementById('question-body');
+        const answerContainerEl = document.getElementById('answer-container');
+        const answerContentEl = document.getElementById('answer-content');
+        const toggleAnswerBtn = document.getElementById('toggle-answer-btn');
+        const submitAnswerBtn = document.getElementById('submit-answer-btn'); // New button
+        const prevBtn = document.getElementById('prev-btn');
+        const nextBtn = document.getElementById('next-btn');
+        const progressIndicatorEl = document.getElementById('progress-indicator');
+
+        // Edit Mode Elements
+        const editContentBtn = document.getElementById('edit-content-btn');
+        const editModeControlsEl = document.getElementById('edit-mode-controls');
+        const saveChangesBtn = document.getElementById('save-changes-btn');
+        const discardChangesBtn = document.getElementById('discard-changes-btn');
+        const updatedDataModal = document.getElementById('updated-data-modal');
+        const updatedSlidesDataTextarea = document.getElementById('updated-slides-data');
+        const closeModalBtn = document.getElementById('close-modal-btn');
+        const copyDataBtn = document.getElementById('copy-data-btn');
+
+
+        let currentQuestionIndex = 0;
+        let isAnswerVisible = false; 
+        let isEditMode = false;
+        let originalSlideDataForEdit = null; 
+        let questionSubmitted = false; // Track if MCQ has been submitted
+
+        let shuffledMatchingItems = null; 
+        let shuffledMatchingDefinitions = null; 
+
+        function shuffleArray(array) {
+            const newArray = [...array];
+            for (let i = newArray.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+            }
+            return newArray;
+        }
+
+        function generateTOC() {
+            tocListEl.innerHTML = ''; 
+            slides.forEach((slide, index) => {
+                const listItem = document.createElement('li');
+                const button = document.createElement('button');
+                button.className = 'w-full text-left px-3 py-2 rounded-md hover:bg-indigo-50 transition-colors duration-150 text-sm text-gray-700 hover:text-indigo-700';
+                let snippet = slide.question.split(' ').slice(0, 7).join(' ');
+                if (slide.question.split(' ').length > 7) snippet += '...';
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = snippet;
+                snippet = tempDiv.textContent || tempDiv.innerText || "";
+
+                button.innerHTML = `<strong>${index + 1}.</strong> ${snippet.replace(/<code.*?>|<\/code>/g, '')}`; 
+                
+                button.addEventListener('click', () => {
+                    if (isEditMode) return; 
+                    currentQuestionIndex = index;
+                    displayQuestion();
+                });
+                listItem.appendChild(button);
+                tocListEl.appendChild(listItem);
+            });
+        }
+        
+        function updateTOCActiveState() {
+            const tocButtons = tocListEl.querySelectorAll('button');
+            tocButtons.forEach((button, index) => {
+                button.classList.toggle('toc-active', index === currentQuestionIndex);
+            });
+            const activeTocItem = tocListEl.querySelector('.toc-active');
+            if (activeTocItem) {
+                activeTocItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }
+
+        function makeEditable(element, isEditable) {
+            element.contentEditable = isEditable;
+            if (isEditable) {
+                // element.focus(); 
+            }
+        }
+
+        function displayQuestion() {
+            const currentSlide = slides[currentQuestionIndex];
+            questionSubmitted = false; // Reset submission state for the new question
+            
+            if (isEditMode && !originalSlideDataForEdit) {
+                 originalSlideDataForEdit = JSON.parse(JSON.stringify(currentSlide));
+            }
+
+            questionTitleEl.innerHTML = currentSlide.question;
+            questionBodyEl.innerHTML = ''; 
+            
+            isAnswerVisible = false; 
+            answerContainerEl.classList.add('hidden'); 
+            answerContentEl.innerHTML = currentSlide.answer; 
+            
+            // Reset buttons visibility/state
+            submitAnswerBtn.classList.add('hidden');
+            toggleAnswerBtn.classList.remove('hidden');
+            toggleAnswerBtn.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline mr-1" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
+                Show Answer`;
+            toggleAnswerBtn.classList.remove('bg-red-500', 'hover:bg-red-600', 'bg-yellow-500', 'hover:bg-yellow-600');
+            toggleAnswerBtn.classList.add('bg-green-500', 'hover:bg-green-600');
+
+            makeEditable(questionTitleEl, isEditMode);
+
+            if (isEditMode) { 
+                answerContainerEl.classList.remove('hidden'); 
+                makeEditable(answerContentEl, true);
+            } else {
+                makeEditable(answerContentEl, false); 
+            }
+            
+            const answerCells = answerContentEl.querySelectorAll('.animated-cell');
+            answerCells.forEach(cell => { 
+                cell.style.opacity = '0';
+                cell.style.transform = 'translateY(10px)';
+            });
+
+            // Render question body and adjust buttons for MCQ types
+            if (currentSlide.type === 'single-choice' || currentSlide.type === 'multiple-choice') {
+                toggleAnswerBtn.classList.add('hidden'); // Hide "Show Answer" initially
+                submitAnswerBtn.classList.remove('hidden'); // Show "Submit" button
+
+                const optionsHtml = currentSlide.options.map((option, index) => {
+                    const inputType = currentSlide.type === 'single-choice' ? 'radio' : 'checkbox';
+                    const optionTextId = `q${currentQuestionIndex}_opt_text_${index}`;
+                    const optionNumber = `${index + 1}. `;
+                    const editableSpan = isEditMode ? `<span id="${optionTextId}" class="editable-option-text" contenteditable="true">${option.text}</span>` : option.text;
+                    // Add sequence number to the beginning of the answer
+                    return `
+                    <label id="q${currentQuestionIndex}_label_${index}" class="flex items-center justify-between p-3 mb-2 border border-gray-300 rounded-md hover:bg-gray-100 cursor-pointer has-[:checked]:bg-indigo-100 has-[:checked]:border-indigo-400 transition-colors duration-150">
+                        <div>
+                            <input type="${inputType}" name="q${currentQuestionIndex}_option${currentSlide.type === 'multiple-choice' ? '_' + index : ''}" value="${index}" class="mr-2 accent-indigo-600 rounded" ${isEditMode ? 'disabled' : ''}>
+                            <span class="font-semibold">${optionNumber}</span>${editableSpan}
+                        </div>
+                        <span class="feedback-icon"></span> 
+                    </label>
+                `;
+                }).join('');
+                questionBodyEl.innerHTML = `<form id="mcq-form">${optionsHtml}</form>`;
+            } else if (currentSlide.id === 'q2' && currentSlide.type === 'matching') { 
+                // Don't shuffle items, keep them in original order for commands
+                const commandItems = currentSlide.items; 
+                // Shuffle only the definitions
+                shuffledMatchingDefinitions = shuffleArray(currentSlide.definitions); 
+                
+                // Create paired rows of commands and definitions
+                let matchingRowsHtml = '';
+                
+                commandItems.forEach((item, index) => {
+                    const definition = shuffledMatchingDefinitions[index];
+                    matchingRowsHtml += `
+                    <div class="matching-row">
+                        <div class="command-item" data-index="${index}">
+                            <div data-id="${item.id}" data-index="${index}" data-command="true" class="matching-item bg-indigo-50 p-3 rounded-md border border-indigo-200 w-full">
+                                ${item.text}
+                            </div>
+                        </div>
+                        <div class="definition-item" data-index="${index}">
+                            <div data-id="${definition.id}" data-index="${index}" data-definition="true" class="matching-item bg-blue-50 p-3 rounded-md border border-blue-200 cursor-grab w-full" draggable="true">
+                                <span class="font-semibold">${index + 1}. </span> ${definition.text}<span class="feedback-icon"></span>
+                            </div>
+                        </div>
+                    </div>`;
+                });
+                
+                questionBodyEl.innerHTML = `
+                    <p class="text-sm text-gray-600 mb-3">Drag and drop the descriptions in the right column to swap their positions and match them with the corresponding Linux commands in the left column.</p>
+                    <div class="matching-container">
+                        <div class="matching-grid">
+                            <div class="matching-header text-indigo-700">Linux Command</div>
+                            <div class="matching-header text-blue-700">Function Description</div>
+                            ${matchingRowsHtml}
+                        </div>
+                    </div>`;
+                
+                // Show submit button for this question
+                toggleAnswerBtn.classList.add('hidden');
+                submitAnswerBtn.classList.remove('hidden');
+                
+                // Add drag-and-drop functionality
+                initDragAndDrop();
+            } else if (currentSlide.type === 'interactive-table') { 
+                const tableShell = currentSlide.tableShell;
+                let tableHtml = "<p class='text-sm text-gray-600 mb-3'>The table below shows the actions. Click 'Show Answer' to see the effects.</p>";
+                tableHtml += "<table class='w-full text-left border-collapse table-auto mt-2'>";
+                tableHtml += "<thead><tr class='bg-indigo-100'>";
+                tableShell.headers.forEach(header => {
+                    tableHtml += `<th class='p-2 border'>${header}</th>`;
+                });
+                tableHtml += "</tr></thead>";
+                tableHtml += "<tbody>";
+                tableShell.rows.forEach(row => {
+                    tableHtml += "<tr>";
+                    tableHtml += `<td class='p-2 border font-semibold'>${row.label}</td>`;
+                    for (let i = 0; i < row.cells; i++) {
+                        tableHtml += `<td class='p-2 border empty-cell'></td>`; 
+                    }
+                    tableHtml += "</tr>";
+                });
+                tableHtml += "</tbody></table>";
+                questionBodyEl.innerHTML = tableHtml;
+            } else if (currentSlide.type === 'table-answer') { 
+                questionBodyEl.innerHTML = `<p class="text-sm text-gray-600">The answer to this question is a table. Click 'Show Answer' to view.</p>`;
+            }
+            
+            // Update Edit Mode UI
+            if (isEditMode) {
+                editModeControlsEl.classList.remove('hidden');
+                editContentBtn.textContent = 'View Mode';
+                editContentBtn.classList.replace('bg-blue-500', 'bg-yellow-500');
+                editContentBtn.classList.replace('hover:bg-blue-600', 'hover:bg-yellow-600');
+                toggleAnswerBtn.disabled = true;
+                submitAnswerBtn.disabled = true; // Disable submit in edit mode
+                prevBtn.disabled = true;
+                nextBtn.disabled = true;
+                toggleAnswerBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                submitAnswerBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                prevBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                nextBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            } else {
+                editModeControlsEl.classList.add('hidden');
+                editContentBtn.textContent = 'Edit Content';
+                editContentBtn.classList.replace('bg-yellow-500', 'bg-blue-500');
+                editContentBtn.classList.replace('hover:bg-yellow-600', 'hover:bg-blue-600');
+                toggleAnswerBtn.disabled = false;
+                submitAnswerBtn.disabled = false;
+                prevBtn.disabled = currentQuestionIndex === 0;
+                nextBtn.disabled = currentQuestionIndex === slides.length - 1;
+                toggleAnswerBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                submitAnswerBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                prevBtn.classList.toggle('opacity-50', prevBtn.disabled);
+                prevBtn.classList.toggle('cursor-not-allowed', prevBtn.disabled);
+                nextBtn.classList.toggle('opacity-50', nextBtn.disabled);
+                nextBtn.classList.toggle('cursor-not-allowed', nextBtn.disabled);
+            }
+            
+            progressIndicatorEl.textContent = `Question ${currentQuestionIndex + 1} / ${slides.length}`;
+            updateTOCActiveState();
+        }
+
+        function initDragAndDrop() {
+            const definitionItems = document.querySelectorAll('[data-definition="true"]');
+            let draggedItem = null;
+            
+            // Add event listeners for all definition items
+            definitionItems.forEach(item => {
+                // When drag starts
+                item.addEventListener('dragstart', function() {
+                    draggedItem = this;
+                    setTimeout(() => this.classList.add('dragging'), 0);
+                });
+                
+                // When drag ends
+                item.addEventListener('dragend', function() {
+                    this.classList.remove('dragging');
+                    draggedItem = null;
+                });
+                
+                // Enable HTML5 drag and drop
+                item.setAttribute('draggable', 'true');
+                
+                // Drag over
+                item.addEventListener('dragover', function(e) {
+                    e.preventDefault();
+                    if (draggedItem && draggedItem !== this && draggedItem.hasAttribute('data-definition')) {
+                        this.classList.add('drag-over');
+                    }
+                });
+                
+                // Drag enter
+                item.addEventListener('dragenter', function(e) {
+                    e.preventDefault();
+                });
+                
+                // Drag leave
+                item.addEventListener('dragleave', function() {
+                    this.classList.remove('drag-over');
+                });
+                
+                // Drop
+                item.addEventListener('drop', function(e) {
+                    e.preventDefault();
+                    if (draggedItem && draggedItem !== this && draggedItem.hasAttribute('data-definition')) {
+                        // Only allow swapping between definitions (right column)
+                        const temp = {
+                            html: this.innerHTML,
+                            dataId: this.getAttribute('data-id'),
+                            dataIndex: this.getAttribute('data-index')
+                        };
+                        
+                        // Swap HTML and data attributes
+                        this.innerHTML = draggedItem.innerHTML;
+                        this.setAttribute('data-id', draggedItem.getAttribute('data-id'));
+                        this.setAttribute('data-index', draggedItem.getAttribute('data-index'));
+                        
+                        draggedItem.innerHTML = temp.html;
+                        draggedItem.setAttribute('data-id', temp.dataId);
+                        draggedItem.setAttribute('data-index', temp.dataIndex);
+                        
+                        this.classList.remove('drag-over');
+                    }
+                });
+            });
+            
+            // For mobile/touch devices
+            definitionItems.forEach(item => {
+                let touchStartX, touchStartY;
+                let lastTouchedItem = null;
+                
+                item.addEventListener('touchstart', function(e) {
+                    touchStartX = e.changedTouches[0].clientX;
+                    touchStartY = e.changedTouches[0].clientY;
+                    draggedItem = this;
+                    setTimeout(() => this.classList.add('dragging'), 0);
+                });
+                
+                item.addEventListener('touchmove', function(e) {
+                    e.preventDefault(); // Prevent scrolling while dragging
+                    
+                    const touchX = e.changedTouches[0].clientX;
+                    const touchY = e.changedTouches[0].clientY;
+                    
+                    this.style.transform = `translate(${touchX - touchStartX}px, ${touchY - touchStartY}px)`;
+                    
+                    // Find item under the touch point
+                    const elementsFromPoint = document.elementsFromPoint(touchX, touchY);
+                    const touchedItem = elementsFromPoint.find(elem => 
+                        elem !== this && elem.hasAttribute('data-definition')
+                    );
+                    
+                    // Reset previously touched item
+                    if (lastTouchedItem && lastTouchedItem !== touchedItem) {
+                        lastTouchedItem.classList.remove('drag-over');
+                    }
+                    
+                    // Highlight new item if it's a valid drop target
+                    if (touchedItem && touchedItem !== this) {
+                        touchedItem.classList.add('drag-over');
+                        lastTouchedItem = touchedItem;
+                    }
+                });
+                
+                item.addEventListener('touchend', function(e) {
+                    this.classList.remove('dragging');
+                    this.style.transform = '';
+                    
+                    const touchX = e.changedTouches[0].clientX;
+                    const touchY = e.changedTouches[0].clientY;
+                    
+                    // Find element under touch point for drop
+                    const elementsFromPoint = document.elementsFromPoint(touchX, touchY);
+                    const dropTarget = elementsFromPoint.find(elem => 
+                        elem !== this && elem.hasAttribute('data-definition')
+                    );
+                    
+                    if (dropTarget) {
+                        // Swap content
+                        const temp = {
+                            html: dropTarget.innerHTML,
+                            dataId: dropTarget.getAttribute('data-id'),
+                            dataIndex: dropTarget.getAttribute('data-index')
+                        };
+                        
+                        dropTarget.innerHTML = this.innerHTML;
+                        dropTarget.setAttribute('data-id', this.getAttribute('data-id'));
+                        dropTarget.setAttribute('data-index', this.getAttribute('data-index'));
+                        
+                        this.innerHTML = temp.html;
+                        this.setAttribute('data-id', temp.dataId);
+                        this.setAttribute('data-index', temp.dataIndex);
+                        
+                        dropTarget.classList.remove('drag-over');
+                    }
+                    
+                    if (lastTouchedItem) {
+                        lastTouchedItem.classList.remove('drag-over');
+                        lastTouchedItem = null;
+                    }
+                    
+                    draggedItem = null;
+                });
+            });
+        }
+
+        function submitAnswer() {
+            if (isEditMode || questionSubmitted) return; // Prevent re-submission
+
+            const currentSlide = slides[currentQuestionIndex];
+            questionSubmitted = true;
+            
+            if (currentSlide.id === 'q2' && currentSlide.type === 'matching') {
+                // For matching question
+                submitAnswerBtn.classList.add('hidden');
+                toggleAnswerBtn.classList.remove('hidden');
+                toggleAnswerBtn.innerHTML = `Show Explanation`;
+                
+                let correctCount = 0;
+                const commandItems = document.querySelectorAll('[data-command="true"]');
+                const definitionItems = document.querySelectorAll('[data-definition="true"]');
+                
+                // Disable dragging after submission
+                definitionItems.forEach(item => {
+                    item.setAttribute('draggable', 'false');
+                    item.classList.add('cursor-default');
+                });
+                
+                // Check each command against its current definition
+                commandItems.forEach((commandItem, index) => {
+                    const commandId = commandItem.getAttribute('data-id');
+                    const definitionItem = document.querySelector(`.definition-item[data-index="${index}"] [data-definition="true"]`);
+                    const definitionId = definitionItem.getAttribute('data-id');
+                    const feedbackSpan = definitionItem.querySelector('.feedback-icon');
+                    
+                    // Find matching IDs (e.g., cmd1 matches with def1, cmd2 with def2, etc.)
+                    const isCorrect = commandId.replace('cmd', '') === definitionId.replace('def', '');
+                    
+                    if (isCorrect) {
+                        definitionItem.classList.add('correct');
+                        feedbackSpan.textContent = '✅';
+                        correctCount++;
+                    } else {
+                        definitionItem.classList.add('incorrect');
+                        feedbackSpan.textContent = '❌';
+                    }
+                });
+                
+                // Show score
+                const scoreElement = document.createElement('p');
+                scoreElement.className = 'mt-4 text-center font-bold text-lg';
+                scoreElement.textContent = `Result: ${correctCount}/${commandItems.length} correct answers`;
+                
+                if (correctCount === commandItems.length) {
+                    scoreElement.classList.add('text-green-600');
+                } else if (correctCount >= commandItems.length / 2) {
+                    scoreElement.classList.add('text-yellow-600');
+                } else {
+                    scoreElement.classList.add('text-red-600');
+                }
+                
+                questionBodyEl.appendChild(scoreElement);
+                
+                return;
+            }
+            
+            // For multiple-choice questions (original code)
+            const form = document.getElementById('mcq-form');
+            if (!form) return;
+
+            submitAnswerBtn.classList.add('hidden');
+            toggleAnswerBtn.classList.remove('hidden');
+            toggleAnswerBtn.innerHTML = `Show Explanation`;
+
+            // Disable all inputs in the form
+            form.querySelectorAll('input').forEach(input => input.disabled = true);
+
+            // Evaluate and apply feedback
+            currentSlide.options.forEach((option, index) => {
+                const label = document.getElementById(`q${currentQuestionIndex}_label_${index}`);
+                const input = form.querySelector(`input[value="${index}"]`);
+                const feedbackSpan = label.querySelector('.feedback-icon');
+                let isCorrect = false;
+                const isSelected = input.checked;
+
+                if (currentSlide.type === 'single-choice') {
+                    isCorrect = (index === currentSlide.correctAnswerIndex);
+                } else if (currentSlide.type === 'multiple-choice') {
+                    isCorrect = currentSlide.correctAnswerIndices.includes(index);
+                }
+
+                // Reset classes first
+                label.classList.remove('option-correct', 'option-incorrect', 'option-missed');
+                feedbackSpan.textContent = ''; // Clear previous icon
+
+                if (isSelected) {
+                    if (isCorrect) {
+                        label.classList.add('option-correct');
+                        feedbackSpan.textContent = '✅';
+                    } else {
+                        label.classList.add('option-incorrect');
+                        feedbackSpan.textContent = '❌';
+                    }
+                } else { // Not selected
+                    if (isCorrect) {
+                        label.classList.add('option-missed');
+                        feedbackSpan.textContent = '⭐'; // Indicate missed correct answer
+                    } else {
+                        // Optionally add a subtle style for correctly unselected wrong answers
+                        // label.classList.add('option-correctly-ignored'); 
+                    }
+                }
+            });
+        }
+
+
+        function toggleAnswer() {
+            // This function now primarily controls the visibility of the explanation text area.
+            // For MCQ, it's only relevant AFTER submission.
+            if (isEditMode) return; 
+            
+            const currentSlide = slides[currentQuestionIndex];
+            
+            // For non-MCQ types OR if MCQ has been submitted, toggle the explanation visibility
+            if (currentSlide.type !== 'single-choice' && currentSlide.type !== 'multiple-choice' || questionSubmitted) {
+                isAnswerVisible = !isAnswerVisible; 
+
+                if (isAnswerVisible) {
+                    answerContainerEl.classList.remove('hidden');
+                    toggleAnswerBtn.innerHTML = `Hide Explanation`; // Adjusted text
+                    toggleAnswerBtn.classList.replace('bg-green-500', 'bg-red-500');
+                    toggleAnswerBtn.classList.replace('hover:bg-green-600', 'hover:bg-red-600');
+
+                    // Trigger animation for Q8 table if it's the current question
+                    if (currentSlide.id === 'q8') {
+                        const cellsToAnimate = answerContentEl.querySelectorAll('.animated-cell');
+                        if (cellsToAnimate.length > 0) {
+                            cellsToAnimate.forEach((cell, index) => {
+                                cell.style.opacity = '0'; 
+                                cell.style.transform = 'translateY(10px)';
+                                setTimeout(() => {
+                                    cell.style.opacity = '1';
+                                    cell.style.transform = 'translateY(0)';
+                                }, 50 + index * 50); 
+                            });
+                        }
+                    }
+                } else { 
+                    answerContainerEl.classList.add('hidden');
+                    toggleAnswerBtn.innerHTML = `Show Explanation`; // Adjusted text
+                    toggleAnswerBtn.classList.replace('bg-red-500', 'bg-green-500');
+                    toggleAnswerBtn.classList.replace('hover:bg-red-600', 'hover:bg-green-600');
+                }
+            } 
+            // If it's an MCQ and not submitted yet, this button does nothing (as it's hidden)
+        }
+
+        function enterEditMode() {
+            isEditMode = true;
+            originalSlideDataForEdit = JSON.parse(JSON.stringify(slides[currentQuestionIndex])); 
+            displayQuestion(); 
+        }
+
+        function exitEditMode(saveData = false) {
+            if (!saveData && originalSlideDataForEdit) {
+                slides[currentQuestionIndex] = JSON.parse(JSON.stringify(originalSlideDataForEdit));
+            }
+            
+            isEditMode = false;
+            originalSlideDataForEdit = null; 
+
+            makeEditable(questionTitleEl, false);
+            makeEditable(answerContentEl, false);
+            
+            displayQuestion(); 
+            if (saveData) generateTOC(); 
+        }
+
+        function saveChanges() {
+            const currentSlide = slides[currentQuestionIndex];
+            currentSlide.question = questionTitleEl.innerHTML; 
+            currentSlide.answer = answerContentEl.innerHTML;   
+
+            if (currentSlide.type === 'single-choice' || currentSlide.type === 'multiple-choice') {
+                currentSlide.options.forEach((option, index) => {
+                    const optionTextEl = document.getElementById(`q${currentQuestionIndex}_opt_text_${index}`);
+                    if (optionTextEl) {
+                        option.text = optionTextEl.innerHTML; 
+                    }
+                });
+            }
+            exitEditMode(true); 
+            showUpdatedDataModal();
+        }
+
+        function showUpdatedDataModal() {
+            updatedSlidesDataTextarea.value = `const slides = ${JSON.stringify(slides, null, 2)};`;
+            updatedDataModal.classList.remove('invisible', 'opacity-0');
+            updatedDataModal.classList.add('visible', 'opacity-100');
+        }
+
+        function hideUpdatedDataModal() {
+            updatedDataModal.classList.remove('visible', 'opacity-100');
+            updatedDataModal.classList.add('invisible', 'opacity-0');
+        }
+        
+        // Event Listeners
+        editContentBtn.addEventListener('click', () => {
+            if (isEditMode) {
+                exitEditMode(false); 
+            } else {
+                enterEditMode();
+            }
+        });
+
+        saveChangesBtn.addEventListener('click', saveChanges);
+        discardChangesBtn.addEventListener('click', () => exitEditMode(false));
+        closeModalBtn.addEventListener('click', hideUpdatedDataModal);
+        copyDataBtn.addEventListener('click', () => {
+            updatedSlidesDataTextarea.select();
+            document.execCommand('copy');
+            copyDataBtn.textContent = 'Copied!';
+            setTimeout(() => { copyDataBtn.textContent = 'Copy Data'; }, 2000);
+        });
+
+        toggleAnswerBtn.addEventListener('click', toggleAnswer);
+        submitAnswerBtn.addEventListener('click', submitAnswer); // Added listener for submit
+
+        prevBtn.addEventListener('click', () => {
+            if (isEditMode) return;
+            if (currentQuestionIndex > 0) {
+                currentQuestionIndex--;
+                displayQuestion();
+            }
+        });
+
+        nextBtn.addEventListener('click', () => {
+            if (isEditMode) return;
+            if (currentQuestionIndex < slides.length - 1) {
+                currentQuestionIndex++;
+                displayQuestion();
+            }
+        });
+        
+        document.querySelectorAll('.btn').forEach(button => {
+            button.classList.add(
+                'px-6', 'py-2', 'rounded-lg', 'font-semibold', 
+                'shadow-md', 'hover:shadow-lg', 'focus:outline-none', 
+                'focus:ring-2', 'focus:ring-opacity-75', 'transition-all', 'duration-150', 'ease-in-out'
+            );
+            if (button.parentElement.id === 'center-buttons') { // Target buttons in the middle group
+                 button.classList.remove('px-6');
+                 button.classList.add('px-4');
+            }
+
+            if (button.id === 'prev-btn') button.classList.add('focus:ring-gray-400');
+            if (button.id === 'toggle-answer-btn') button.classList.add('focus:ring-green-400');
+            if (button.id === 'submit-answer-btn') button.classList.add('focus:ring-purple-400');
+            if (button.id === 'next-btn') button.classList.add('focus:ring-indigo-400');
+            if (button.id === 'edit-content-btn') button.classList.add('focus:ring-blue-400');
+            if (button.id === 'save-changes-btn') button.classList.add('focus:ring-green-400');
+            if (button.id === 'discard-changes-btn') button.classList.add('focus:ring-red-400');
+            if (button.id === 'copy-data-btn') button.classList.add('focus:ring-indigo-400');
+            if (button.id === 'close-modal-btn') button.classList.add('focus:ring-gray-400');
+        });
+
+        // Initial setup
+        generateTOC();
+        displayQuestion(); 
+    </script>
+</body>
+</html>
